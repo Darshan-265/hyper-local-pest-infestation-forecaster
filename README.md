@@ -15,7 +15,7 @@ Built with **Flask, OpenCV, Leaflet.js, and PyTorch**.
 ---
 
 ## 🏗️ Project Architecture
-## 🏗️ Project Architecture
+
 
 pest_project/
 - app.py                # Flask backend
