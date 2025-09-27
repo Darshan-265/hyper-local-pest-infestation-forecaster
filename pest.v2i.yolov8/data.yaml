@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['earthworms', 'slug']
+
+roboflow:
+  workspace: darshan-cqlyx
+  project: pest-wgvap
+  version: 2
+  license: Private
+  url: https://app.roboflow.com/darshan-cqlyx/pest-wgvap/2

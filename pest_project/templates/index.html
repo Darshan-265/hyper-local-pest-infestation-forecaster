@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Pest Detection & Forecast</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <style>
+    :root{
+      --neon: #00ffcc;
+      --bg: #000;
+      --panel: #0f0f12;
+      --muted: #bdbdbd;
+      --card-shadow: 0 8px 30px rgba(0,255,204,0.08);
+    }
+
+    /* Page */
+    html,body { height:100%; margin:0; background:var(--bg); color:#fff; font-family:Inter, Arial, sans-serif; }
+    h1 { text-align:center; margin:18px 0; color:var(--neon); text-shadow:0 0 14px rgba(0,255,204,0.12); }
+
+    /* Layout: side-by-side */
+    .main {
+      display:flex;
+      gap:20px;
+      padding:18px;
+      align-items:flex-start;
+      justify-content:center;
+    }
+
+    /* Left panel (upload + result) */
+    .left {
+      flex:0 1 38%;
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border:1px solid rgba(255,255,255,0.04);
+      border-radius:12px;
+      padding:18px;
+      box-shadow:var(--card-shadow);
+    }
+
+    .upload-card {
+      background:linear-gradient(90deg, rgba(0,255,204,0.03), rgba(0,255,204,0.01));
+      border:1px solid rgba(0,255,204,0.08);
+      padding:16px;
+      border-radius:10px;
+      margin-bottom:14px;
+      text-align:center;
+      animation: glow 2.4s infinite alternate;
+    }
+
+    @keyframes glow {
+      from { box-shadow: 0 0 8px rgba(0,255,204,0.05); }
+      to   { box-shadow: 0 0 40px rgba(0,255,204,0.12); transform: translateY(-2px); }
+    }
+
+    .upload-input {
+      display:block;
+      margin:12px auto;
+      color:var(--neon);
+      background:transparent;
+      border:1px dashed rgba(0,255,204,0.12);
+      padding:10px 14px;
+      border-radius:8px;
+      width:80%;
+    }
+
+    .btn {
+      display:inline-block;
+      margin-top:10px;
+      background:linear-gradient(90deg,#00ffcc,#00ffaa);
+      color:#022;
+      border:none;
+      padding:10px 16px;
+      border-radius:8px;
+      cursor:pointer;
+      font-weight:600;
+      transition:transform .12s ease;
+    }
+    .btn:hover { transform:translateY(-3px) scale(1.02); }
+
+    #pestCount { margin-top:12px; color:var(--neon); font-weight:700; text-align:center; }
+
+    /* Center result image */
+    #resultImage {
+      display:block;
+      margin:14px auto;
+      max-width:100%;
+      border-radius:10px;
+      border:1px solid rgba(0,255,204,0.12);
+      box-shadow:0 6px 20px rgba(0,0,0,0.6);
+    }
+
+    /* Right panel (map) */
+    .right {
+      flex:0 1 58%;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    #map {
+      height:600px;
+      border-radius:12px;
+      border:1px solid rgba(0,255,204,0.08);
+      box-shadow:var(--card-shadow);
+    }
+
+    /* Legend and hotspot-list under map */
+    .below {
+      display:flex;
+      gap:20px;
+      align-items:flex-start;
+      justify-content:space-between;
+      margin-top:8px;
+    }
+
+    .legend {
+      background:var(--panel);
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.03);
+      min-width:220px;
+    }
+    .legend h3 { margin:0 0 8px 0; font-size:14px; color:var(--neon); }
+    .legend-row { display:flex; gap:10px; align-items:center; margin:6px 0; }
+    .swatch { width:18px; height:18px; border-radius:4px; box-shadow:0 2px 8px rgba(0,0,0,0.6); }
+
+    .hotspot-list {
+      flex:1;
+      background:var(--panel);
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,0.03);
+      max-height:140px;
+      overflow:auto;
+    }
+    .hotspot-item {
+      display:flex;
+      gap:12px;
+      align-items:center;
+      padding:6px 6px;
+      border-bottom:1px dashed rgba(255,255,255,0.02);
+      cursor:pointer;
+    }
+    .hotspot-item:hover { background: rgba(255,255,255,0.02); }
+
+    .muted { color:var(--muted); font-size:13px; }
+    .small { font-size:13px; color:var(--muted); margin-top:6px; text-align:center; }
+  </style>
+</head>
+<body>
+  <h1>🌾 Pest Detection & Forecast (Gujarat)</h1>
+
+  <div class="main">
+    <!-- Left: Upload & Result -->
+    <div class="left">
+      <div class="upload-card">
+        <div style="font-weight:700; color:var(--neon);">Upload Image for Detection</div>
+        <input id="imageUpload" class="upload-input" type="file" accept="image/*">
+        <button id="detectBtn" class="btn">Upload & Detect</button>
+        <div id="pestCount" style="display:none;"></div>
+      </div>
+
+      <div>
+        <img id="resultImage" style="display:none;" alt="detection result">
+      </div>
+    </div>
+
+    <!-- Right: Map -->
+    <div class="right">
+      <div id="map"></div>
+
+      <div class="below">
+        <!-- Legend -->
+        <div class="legend">
+          <h3>Legend</h3>
+          <div class="legend-row"><div class="swatch" style="background:#e74c3c"></div><div>High risk (RED)</div></div>
+          <div class="legend-row"><div class="swatch" style="background:#f1c40f"></div><div>Medium risk (YELLOW)</div></div>
+          <div class="legend-row"><div class="swatch" style="background:#2ecc71"></div><div>Low risk (GREEN)</div></div>
+        </div>
+
+        <!-- Hotspot list -->
+        <div class="hotspot-list" id="hotspotList">
+          <div class="small muted">Detected hotspots will appear here — click an item to zoom.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Setup map (Gujarat center)
+    const map = L.map('map').setView([22.5, 72.5], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+
+    // Layer group so we can clear hotspots in one go
+    const hotspotsLayer = L.layerGroup().addTo(map);
+
+    // Color mapping
+    const colorMap = { red: '#e74c3c', yellow: '#f1c40f', green: '#2ecc71' };
+
+    // Elements
+    const btn = document.getElementById('detectBtn');
+    const input = document.getElementById('imageUpload');
+    const resultImg = document.getElementById('resultImage');
+    const pestCountEl = document.getElementById('pestCount');
+    const hotspotList = document.getElementById('hotspotList');
+
+    // Click handler
+    btn.addEventListener('click', uploadAndDetect);
+
+    async function uploadAndDetect() {
+      if (!input.files || input.files.length === 0) { alert('Please select an image'); return; }
+      const file = input.files[0];
+
+      const formData = new FormData();
+      formData.append('image', file);
+
+      // Use relative URL so it works when served by Flask: /detect
+      let res;
+      try {
+        res = await fetch('/detect', { method: 'POST', body: formData });
+      } catch (err) {
+        alert('Request failed — make sure your Flask server is running and you opened this page via the server (http://127.0.0.1:PORT/)');
+        return;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        alert('Server error: ' + (text || res.status + ' ' + res.statusText));
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.error) { alert('Error: ' + data.error); return; }
+
+      // Display result image centered
+      resultImg.src = data.result_image_url;
+      resultImg.style.display = 'block';
+
+      // Pest count
+      pestCountEl.style.display = 'block';
+      pestCountEl.innerText = '🐛 Pests detected: ' + (data.pest_count ?? 0);
+
+      // Clear previous hotspots
+      hotspotsLayer.clearLayers();
+      hotspotList.innerHTML = ''; // clear list
+
+      const hotspots = data.predicted_hotspots || [];
+      if (hotspots.length === 0) {
+        hotspotList.innerHTML = '<div class="small muted">No hotspots predicted.</div>';
+      }
+
+      // if backend didn't send 'risk' for hotspot, infer from pest_count
+      function inferRisk(h) {
+        if (h.risk) return h.risk;
+        const pc = data.pest_count ?? 0;
+        if (pc > 10) return 'red';
+        if (pc > 5) return 'yellow';
+        return 'green';
+      }
+
+      const bounds = [];
+
+      hotspots.forEach((h, idx) => {
+        const lat = Number(h.lat);
+        const lon = Number(h.lon);
+        const risk = inferRisk(h);
+        const color = colorMap[risk] || colorMap.green;
+
+        // marker + popup
+        const marker = L.circleMarker([lat, lon], {
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.9,
+          radius: 8,
+          weight: 1
+        });
+
+        const popupText = `<strong>Hotspot ${idx+1}</strong><br/>Risk: ${risk.toUpperCase()}<br/>(${lat.toFixed(4)}, ${lon.toFixed(4)})`;
+        marker.bindPopup(popupText);
+
+        // zone circle
+        const zone = L.circle([lat, lon], {
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.12,
+          radius: 2000
+        });
+
+        // add both to layer group
+        marker.addTo(hotspotsLayer);
+        zone.addTo(hotspotsLayer);
+
+        bounds.push([lat, lon]);
+
+        // Add item to hotspot list (clickable)
+        const item = document.createElement('div');
+        item.className = 'hotspot-item';
+        const sw = document.createElement('div');
+        sw.className = 'swatch';
+        sw.style.background = color;
+        const txt = document.createElement('div');
+        txt.innerHTML = `<div style="font-weight:700">${idx+1}. ${risk.toUpperCase()}</div><div class="muted">${lat.toFixed(4)}, ${lon.toFixed(4)}</div>`;
+        item.appendChild(sw);
+        item.appendChild(txt);
+
+        item.addEventListener('click', () => {
+          map.setView([lat, lon], 12, { animate: true });
+          marker.openPopup();
+        });
+
+        hotspotList.appendChild(item);
+      });
+
+      // Auto-zoom to hotspots if present
+      if (bounds.length > 0) {
+        map.fitBounds(bounds, { padding: [60, 60] });
+      }
+    }
+  </script>
+</body>
+</html>
